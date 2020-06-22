@@ -81,6 +81,7 @@
       const observer = new IntersectionObserver((entries, self) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
+            entry.target.style.visibility = "visible";
             let img = entry.target.querySelector("img");
             img.src = img.dataset.src;
             self.unobserve(entry.target);
@@ -104,9 +105,9 @@
                       <p class="title is-4">${site["name"]}</p>
                       <p class="subtitle is-6">
                         <a href="${site["site"]}">${site["site"]
-          .replace("http://", "")
-          .replace("https://", "")
-          .replace("/", "")}</a>
+                        .replace("http://", "")
+                        .replace("https://", "")
+                        .replace("/", "")}</a>
                       </p>
                     </div>
                   </div>
@@ -123,7 +124,7 @@
 
       const cardFactory = (comic) => {
         let url = `https://guya.moe/fs/${comic["url"]}`;
-        const TEMPLATE = `<div class="column is-one-quarter">
+        const TEMPLATE = `<div class="column is-one-quarter" style="visibility: hidden;">
           <div class="card">
             <div class="card-image">
               <a href="${url}">
@@ -323,7 +324,7 @@
 
       let runner = latest.more;
       let loading = false;
-      window.addEventListener("wheel", () => {
+      window.addEventListener("scroll", () => {
         if (
           window.innerHeight + window.scrollY >= document.body.offsetHeight &&
           !loading
@@ -427,9 +428,6 @@
       progress {
         margin-top: 36px;
         margin-bottom: 36px;
-      }
-      .card {
-        transition: all 2s;
       }
     </style>
   </head>
