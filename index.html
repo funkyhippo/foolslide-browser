@@ -26,7 +26,7 @@
       rel="shortcut icon"
       sizes="128x128"
       type="image/png"
-      href="/static/logo_small.png?v=0ef06f1"
+      href="https://guya.moe/static/logo_small.png?v=0ef06f1"
     />
     <link
       rel="stylesheet"
@@ -42,6 +42,8 @@
       const BROWSE_CONTAINER = "browse-container";
       const SEARCH_CONTAINER = "search-container";
 
+      const BASE_URL = "https://jaiminisbox.com/reader";
+
       const observer = new IntersectionObserver((entries, self) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
@@ -53,10 +55,11 @@
       });
 
       const cardFactory = (comic) => {
+        let url = `https://guya.moe/fs/${comic["url"]}`;
         const TEMPLATE = `<div class="column is-one-quarter">
           <div class="card">
             <div class="card-image">
-              <a href="/fs/${comic["url"]}">
+              <a href="${url}">
                 <figure class="image">
                   <img
                     data-src="${comic["thumb"]}"
@@ -67,7 +70,7 @@
             <div class="card-content">
               <div class="media">
                 <div class="media-content">
-                  <p class="title is-4"><a href="/fs/${comic["url"]}">${comic["title"]}</a></p>
+                  <p class="title is-4"><a href="${url}">${comic["title"]}</a></p>
                     <p class="subtitle is-6">By: ${comic["author"]}</p>
                 </div>
               </div>
@@ -96,7 +99,7 @@
           title: comic["name"],
           author: comic["author"] || "No author info",
           description: (comic["description"] || "").slice(0, 128),
-          thumb: comic["fullsized_thumb_url"],
+          thumb: comic["fullsized_thumb_url"] || "https://bulma.io/images/placeholders/256x256.png",
           url: comic["href"],
         };
         if (!meta["description"]) meta["description"] = "No description.";
@@ -117,7 +120,7 @@
               let child = loaderFactory();
               document.getElementById(BROWSE_CONTAINER).appendChild(child);
               fetch(
-                `https://cors-anywhere.herokuapp.com/https://jaiminisbox.com/reader/api/reader/comics?page=${latestPage}&per_page=100&orderby=desc,id`
+                `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/comics?page=${latestPage}&per_page=100&orderby=desc,id`
               ).then(async (e) => {
                 child.remove();
                 e = await e.json();
@@ -185,7 +188,7 @@
               let child = loaderFactory();
               document.getElementById(LATEST_CONTAINER).appendChild(child);
               fetch(
-                `https://cors-anywhere.herokuapp.com/https://jaiminisbox.com/reader/api/reader/chapters?page=${latestPage}&per_page=100&orderby=desc,updated`
+                `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/chapters?page=${latestPage}&per_page=100&orderby=desc,updated`
               ).then(async (e) => {
                 child.remove();
                 e = await e.json();
