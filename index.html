@@ -188,8 +188,9 @@
       };
 
       class Handler {
-        constructor(container) {
+        constructor(container, urlFunc) {
           this.container = container;
+          this.urlFunc = urlFunc;
           this.latestPage = 1;
           this.done = false;
           this.elements = {};
@@ -221,9 +222,7 @@
             if (!this.done) {
               let child = loaderFactory();
               document.getElementById(this.container).appendChild(child);
-              fetch(
-                `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/comics?page=${this.latestPage}&per_page=100&orderby=desc,id`
-              ).then(async (e) => {
+              fetch(this.urlFunc(this.latestPage)).then(async (e) => {
                 child.remove();
                 e = await e.json();
                 if (e["error"]) {
@@ -231,7 +230,8 @@
                   resolve();
                   return;
                 }
-                (e["comics"] || []).forEach((comic) => {
+                (e["comics"] || e["chapters"] || []).forEach((comic) => {
+                  if (e["chapters"]) comic = comic["comic"];
                   if (comic["name"] in this.elements) return;
                   let meta = getComicInfo(comic);
                   let card = cardFactory(meta);
@@ -256,8 +256,8 @@
       }
 
       class SearchableBrowser extends Handler {
-        constructor(container, searchContainer) {
-          super(container);
+        constructor(container, searchContainer, urlFunc) {
+          super(container, urlFunc);
           this.searchContainer = searchContainer;
         }
 
@@ -285,8 +285,17 @@
         };
       }
 
-      const browse = new SearchableBrowser(BROWSE_CONTAINER, SEARCH_CONTAINER);
-      const latest = new Handler(LATEST_CONTAINER);
+      const browse = new SearchableBrowser(
+        BROWSE_CONTAINER,
+        SEARCH_CONTAINER,
+        (p) =>
+          `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/comics?page=${p}&per_page=100&orderby=desc,id`
+      );
+      const latest = new Handler(
+        LATEST_CONTAINER,
+        (p) =>
+          `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/chapters?page=${p}&per_page=100&orderby=desc,updated`
+      );
 
       const chooseSite = (reader, name) => {
         document.getElementById("site-text").innerHTML = name;
