@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html html="en">
+  <head>
+    <meta name="robots" content="noindex" />
+    <meta name="robots" content="nofollow" />
+    <title>Jaimini's Box</title>
+    <meta name="twitter:title" content="Jaimini's Box" />
+    <meta
+      name="twitter:description"
+      content="Browse JB's comics, without JB!"
+    />
+    <meta property="og:description" content="Browse JB's comics, without JB!" />
+    <meta name="description" content="Browse JB's comics, without JB!" />
+    <meta
+      name="twitter:image"
+      content="https://jaiminisbox.com/assets/images/logo.png"
+    />
+    <meta
+      property="og:image"
+      content="https://jaiminisbox.com/assets/images/logo.png"
+    />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="referrer" content="same-origin" />
+    <link
+      rel="shortcut icon"
+      sizes="128x128"
+      type="image/png"
+      href="/static/logo_small.png?v=0ef06f1"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bulma@0.9.0/css/bulma.min.css"
+    />
+    <meta name="referrer" content="same-origin" />
+    <script>
+      const PARSER = new DOMParser();
+      const LATEST_NAV = "latest-nav";
+      const BROWSE_NAV = "browse-nav";
+      const SEARCH_NAV = "search-nav";
+      const LATEST_CONTAINER = "latest-container";
+      const BROWSE_CONTAINER = "browse-container";
+      const SEARCH_CONTAINER = "search-container";
+
+      const observer = new IntersectionObserver((entries, self) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            let img = entry.target.querySelector("img");
+            img.src = img.dataset.src;
+            self.unobserve(entry.target);
+          }
+        });
+      });
+
+      const cardFactory = (comic) => {
+        const TEMPLATE = `<div class="column is-one-quarter">
+          <div class="card">
+            <div class="card-image">
+              <a href="/fs/${comic["url"]}">
+                <figure class="image">
+                  <img
+                    data-src="${comic["thumb"]}"
+                  />
+                </figure>
+              </a>
+            </div>
+            <div class="card-content">
+              <div class="media">
+                <div class="media-content">
+                  <p class="title is-4"><a href="/fs/${comic["url"]}">${comic["title"]}</a></p>
+                    <p class="subtitle is-6">By: ${comic["author"]}</p>
+                </div>
+              </div>
+
+              <div class="content">
+                ${comic["description"]}
+                <br />
+              </div>
+            </div>
+          </div>
+        </div>`;
+        return PARSER.parseFromString(TEMPLATE, "text/html").body.firstChild;
+      };
+
+      const loaderFactory = () => {
+        let loader = document.createElement("progress");
+        loader.classList.add("progress");
+        loader.classList.add("is-small");
+        loader.classList.add("is-dark");
+        loader.setAttribute("max", "100");
+        return loader;
+      };
+
+      const getComicInfo = (comic) => {
+        let meta = {
+          title: comic["name"],
+          author: comic["author"] || "No author info",
+          description: (comic["description"] || "").slice(0, 128),
+          thumb: comic["fullsized_thumb_url"],
+          url: comic["href"],
+        };
+        if (!meta["description"]) meta["description"] = "No description.";
+        else if (meta["description"].length === 128)
+          meta["description"] += "...";
+        return meta;
+      };
+
+      const browse = (() => {
+        let latestPage = 1;
+        let done = false;
+        let elements = {};
+        let order = [];
+
+        let more = () => {
+          return new Promise((resolve, reject) => {
+            if (!done) {
+              let child = loaderFactory();
+              document.getElementById(BROWSE_CONTAINER).appendChild(child);
+              fetch(
+                `https://cors-anywhere.herokuapp.com/https://jaiminisbox.com/reader/api/reader/comics?page=${latestPage}&per_page=100&orderby=desc,id`
+              ).then(async (e) => {
+                child.remove();
+                e = await e.json();
+                if (e["error"]) {
+                  done = true;
+                  resolve();
+                  return;
+                }
+                (e["comics"] || []).forEach((comic) => {
+                  if (comic["name"] in elements) return;
+                  let meta = getComicInfo(comic);
+                  let card = cardFactory(meta);
+                  elements[comic["name"]] = card;
+                  order.push(comic["name"]);
+                  document.getElementById(BROWSE_CONTAINER).appendChild(card);
+                  observer.observe(card);
+                });
+                latestPage++;
+                resolve();
+              });
+            } else {
+              resolve();
+            }
+          });
+        };
+
+        let find = async (key) => {
+          let child = loaderFactory();
+          document.getElementById(SEARCH_CONTAINER).appendChild(child);
+          while (!done) {
+            await more();
+          }
+          child.remove();
+          document
+            .getElementById(SEARCH_CONTAINER)
+            .querySelector(".columns").innerHTML = "";
+          let res = order.filter((e) =>
+            e.toLowerCase().includes((key || "").toLowerCase())
+          );
+          res.forEach((e) => {
+            let clone = elements[e].cloneNode(true);
+            observer.observe(clone);
+            document
+              .getElementById(SEARCH_CONTAINER)
+              .querySelector(".columns")
+              .appendChild(clone);
+          });
+        };
+
+        return {
+          more: more,
+          find: find,
+        };
+      })();
+
+      const latest = (() => {
+        let latestPage = 1;
+        let done = false;
+        let elements = {};
+        let order = [];
+
+        let more = () => {
+          return new Promise((resolve, reject) => {
+            if (!done) {
+              let child = loaderFactory();
+              document.getElementById(LATEST_CONTAINER).appendChild(child);
+              fetch(
+                `https://cors-anywhere.herokuapp.com/https://jaiminisbox.com/reader/api/reader/chapters?page=${latestPage}&per_page=100&orderby=desc,updated`
+              ).then(async (e) => {
+                child.remove();
+                e = await e.json();
+                if (e["error"]) {
+                  done = true;
+                  resolve();
+                  return;
+                }
+                (e["chapters"] || []).forEach((comic) => {
+                  comic = comic["comic"];
+                  if (comic["name"] in elements) return;
+                  let meta = getComicInfo(comic);
+                  let card = cardFactory(meta);
+                  elements[comic["name"]] = card;
+                  order.push(comic["name"]);
+                  document.getElementById(LATEST_CONTAINER).appendChild(card);
+                  observer.observe(card);
+                });
+                latestPage++;
+                resolve();
+              });
+            } else {
+              resolve();
+            }
+          });
+        };
+
+        return {
+          more: more,
+        };
+      })();
+
+      let runner = latest.more;
+      let loading = false;
+      window.addEventListener("scroll", () => {
+        if (
+          window.innerHeight + window.scrollY >= document.body.offsetHeight &&
+          !loading
+        ) {
+          loading = true;
+          runner().then(() => (loading = false));
+        }
+      });
+
+      document.addEventListener("DOMContentLoaded", () => {
+        latest.more();
+        browse.more();
+        const $navbarBurgers = Array.prototype.slice.call(
+          document.querySelectorAll(".navbar-burger"),
+          0
+        );
+
+        if ($navbarBurgers.length > 0) {
+          $navbarBurgers.forEach((el) => {
+            el.addEventListener("click", () => {
+              const nav = document.getElementById("navMenu");
+
+              el.classList.toggle("is-active");
+              nav.classList.toggle("is-active");
+            });
+          });
+        }
+
+        const navItems = Array.prototype.slice.call(
+          document.querySelectorAll(".ni"),
+          0
+        );
+
+        navItems.forEach((e) => {
+          e.addEventListener("click", () => {
+            navItems.forEach((el) => {
+              if (el === e) {
+                return;
+              }
+              el.classList.remove("is-active");
+              let id = el.getAttribute("id").replace("nav", "container");
+              document.getElementById(id).classList.add("is-hidden");
+            });
+            document
+              .querySelector(".navbar-burger")
+              .classList.remove("is-active");
+            document.getElementById("navMenu").classList.remove("is-active");
+            let id = e.getAttribute("id").replace("nav", "container");
+            document.getElementById(id).classList.remove("is-hidden");
+            e.classList.add("is-active");
+          });
+        });
+        document.getElementById(LATEST_NAV).addEventListener("click", () => {
+          window.location.hash = "latest";
+          runner = latest.more;
+        });
+
+        document.getElementById(BROWSE_NAV).addEventListener("click", () => {
+          window.location.hash = "browse";
+          runner = browse.more;
+        });
+
+        document.getElementById(SEARCH_NAV).addEventListener("click", () => {
+          window.location.hash = "search";
+          runner = browse.more;
+        });
+
+        document
+          .getElementById("search-box")
+          .addEventListener("change", (e) => {
+            browse.find(e.target.value);
+          });
+
+        console.log(window.location.hash);
+        switch (window.location.hash) {
+          case "#search":
+            document.getElementById(SEARCH_NAV).click();
+            break;
+          case "#browse":
+            document.getElementById(BROWSE_NAV).click();
+            break;
+          case "#latest":
+          default:
+            document.getElementById(LATEST_NAV).click();
+        }
+      });
+    </script>
+    <style>
+      progress {
+        margin-top: 36px;
+        margin-bottom: 36px;
+      }
+      .card {
+        transition: all 2s;
+      }
+    </style>
+  </head>
+
+  <body>
+    <nav class="navbar is-light" role="navigation" aria-label="main navigation">
+      <div class="navbar-brand">
+        <div class="navbar-item navbar-logo">
+          <a href="/">
+            <img src="https://jaiminisbox.com/assets/images/logo.png" />
+          </a>
+        </div>
+
+        <a
+          role="button"
+          class="navbar-burger"
+          aria-label="menu"
+          aria-expanded="false"
+        >
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+          <span aria-hidden="true"></span>
+        </a>
+      </div>
+
+      <div id="navMenu" class="navbar-menu">
+        <div class="navbar-start">
+          <a class="navbar-item ni" id="latest-nav">
+            Latest
+          </a>
+          <a class="navbar-item ni" id="browse-nav">
+            Browse
+          </a>
+          <a class="navbar-item ni" id="search-nav">
+            Search
+          </a>
+        </div>
+        <div class="navbar-end"></div>
+      </div>
+    </nav>
+    <div class="container is-fluid">
+      <div class="container">
+        <div class="columns is-multiline is-hidden" id="latest-container">
+          <section class="hero column is-full">
+            <div class="hero-body">
+              <div class="container">
+                <h1 class="title">
+                  Latest
+                </h1>
+                <h2 class="subtitle">
+                  Series with new chapters are listed first.
+                </h2>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="columns is-multiline is-hidden" id="browse-container">
+          <section class="hero column is-full">
+            <div class="hero-body">
+              <div class="container">
+                <h1 class="title">
+                  Browse
+                </h1>
+                <h2 class="subtitle">
+                  Newer series are listed first.
+                </h2>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="columns is-multiline is-hidden" id="search-container">
+          <section class="hero column is-full">
+            <div class="hero-body">
+              <div class="container">
+                <h1 class="title">
+                  Search
+                </h1>
+                <h2 class="subtitle">
+                  Press enter after your query to search.
+                </h2>
+              </div>
+            </div>
+          </section>
+          <input
+            class="input is-medium"
+            id="search-box"
+            type="text"
+            placeholder="Search..."
+          />
+          <div class="container" style="margin-top: 36px;">
+            <div class="columns is-multiline"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
