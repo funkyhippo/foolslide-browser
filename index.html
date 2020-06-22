@@ -9,16 +9,16 @@
       name="twitter:description"
       content="Browse FoolSlide comics, without FoolSlide! Powered by guya.moe."
     />
-    <meta property="og:description" content="Browse FoolSlide comics, without FoolSlide! Powered by guya.moe." />
-    <meta name="description" content="Browse FoolSlide comics, without FoolSlide! Powered by guya.moe." />
     <meta
-      name="twitter:image"
-      content="https://guya.moe/static/logo.png"
+      property="og:description"
+      content="Browse FoolSlide comics, without FoolSlide! Powered by guya.moe."
     />
     <meta
-      property="og:image"
-      content="https://guya.moe/static/logo.png"
+      name="description"
+      content="Browse FoolSlide comics, without FoolSlide! Powered by guya.moe."
     />
+    <meta name="twitter:image" content="https://guya.moe/static/logo.png" />
+    <meta property="og:image" content="https://guya.moe/static/logo.png" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="referrer" content="same-origin" />
@@ -43,6 +43,8 @@
       const BROWSE_CONTAINER = "browse-container";
       const SEARCH_CONTAINER = "search-container";
       const CONFIG_CONTAINER = "configure-container";
+
+      const LOAD_AMOUNT = 12;
 
       let sites = [
         {
@@ -76,12 +78,17 @@
           site: "https://www.silentsky-scans.net/",
           reader: "https://reader.silentsky-scans.net",
         },
+        {
+          thumbnail: "https://bulma.io/images/placeholders/96x96.png",
+          name: "Hentai Cafe",
+          site: "https://hentai.cafe/",
+          reader: "https://hentai.cafe/manga",
+        },
       ];
 
       const observer = new IntersectionObserver((entries, self) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            entry.target.style.visibility = "visible";
             let img = entry.target.querySelector("img");
             img.src = img.dataset.src;
             self.unobserve(entry.target);
@@ -105,16 +112,18 @@
                       <p class="title is-4">${site["name"]}</p>
                       <p class="subtitle is-6">
                         <a href="${site["site"]}">${site["site"]
-                        .replace("http://", "")
-                        .replace("https://", "")
-                        .replace("/", "")}</a>
+          .replace("http://", "")
+          .replace("https://", "")
+          .replace("/", "")}</a>
                       </p>
                     </div>
                   </div>
                   <footer class="card-footer">
                     <a class="card-footer-item" data-url="${
                       site["reader"]
-                    }" data-name="${site["name"]}" onclick="chooseSite(this.dataset.url, this.dataset.name)">Choose</a>
+                    }" data-name="${
+          site["name"]
+        }" onclick="chooseSite(this.dataset.url, this.dataset.name)">Choose</a>
                   </footer>
                 </div>
               </div>
@@ -124,7 +133,7 @@
 
       const cardFactory = (comic) => {
         let url = `https://guya.moe/fs/${comic["url"]}`;
-        const TEMPLATE = `<div class="column is-one-quarter" style="visibility: hidden;">
+        const TEMPLATE = `<div class="column is-one-quarter">
           <div class="card">
             <div class="card-image">
               <a href="${url}">
@@ -178,47 +187,58 @@
         return meta;
       };
 
-      const browse = (() => {
-        let latestPage = 1;
-        let done = false;
-        let elements = {};
-        let order = [];
+      class Handler {
+        constructor(container) {
+          this.container = container;
+          this.latestPage = 1;
+          this.done = false;
+          this.elements = {};
+          this.hidden = [];
+        }
 
-        let reset = () => {
-          done = false;
-          for (let element in elements) {
-            elements[element].remove();
+        reset = () => {
+          this.done = false;
+          for (let element in this.elements) {
+            this.elements[element].remove();
           }
-          elements = {};
-          order = [];
-          latestPage = 1;
+          this.elements = {};
+          this.hidden = [];
+          this.latestPage = 1;
         };
 
-        let more = () => {
+        load = () => {
+          let idx = LOAD_AMOUNT;
+          while (this.hidden.length && idx) {
+            let elem = this.elements[this.hidden.shift()];
+            document.getElementById(this.container).appendChild(elem);
+            observer.observe(elem);
+            idx--;
+          }
+        };
+
+        buffer = () => {
           return new Promise((resolve, reject) => {
-            if (!done) {
+            if (!this.done) {
               let child = loaderFactory();
-              document.getElementById(BROWSE_CONTAINER).appendChild(child);
+              document.getElementById(this.container).appendChild(child);
               fetch(
-                `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/comics?page=${latestPage}&per_page=100&orderby=desc,id`
+                `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/comics?page=${this.latestPage}&per_page=100&orderby=desc,id`
               ).then(async (e) => {
                 child.remove();
                 e = await e.json();
                 if (e["error"]) {
-                  done = true;
+                  this.done = true;
                   resolve();
                   return;
                 }
                 (e["comics"] || []).forEach((comic) => {
-                  if (comic["name"] in elements) return;
+                  if (comic["name"] in this.elements) return;
                   let meta = getComicInfo(comic);
                   let card = cardFactory(meta);
-                  elements[comic["name"]] = card;
-                  order.push(comic["name"]);
-                  document.getElementById(BROWSE_CONTAINER).appendChild(card);
-                  observer.observe(card);
+                  this.elements[comic["name"]] = card;
+                  this.hidden.push(comic["name"]);
                 });
-                latestPage++;
+                this.latestPage++;
                 resolve();
               });
             } else {
@@ -227,91 +247,46 @@
           });
         };
 
-        let find = async (key) => {
+        more = async () => {
+          if (!this.hidden.length) {
+            await this.buffer();
+          }
+          this.load();
+        };
+      }
+
+      class SearchableBrowser extends Handler {
+        constructor(container, searchContainer) {
+          super(container);
+          this.searchContainer = searchContainer;
+        }
+
+        find = async (key) => {
+          document
+            .getElementById(this.searchContainer)
+            .querySelector(".columns").innerHTML = "";
           let child = loaderFactory();
-          document.getElementById(SEARCH_CONTAINER).appendChild(child);
-          while (!done) {
-            await more();
+          document.getElementById(this.searchContainer).appendChild(child);
+          while (!this.done) {
+            await this.buffer();
           }
           child.remove();
-          document
-            .getElementById(SEARCH_CONTAINER)
-            .querySelector(".columns").innerHTML = "";
-          let res = order.filter((e) =>
+          let res = Object.keys(this.elements).filter((e) =>
             e.toLowerCase().includes((key || "").toLowerCase())
           );
           res.forEach((e) => {
-            let clone = elements[e].cloneNode(true);
-            observer.observe(clone);
+            let clone = this.elements[e].cloneNode(true);
             document
-              .getElementById(SEARCH_CONTAINER)
+              .getElementById(this.searchContainer)
               .querySelector(".columns")
               .appendChild(clone);
+            observer.observe(clone);
           });
         };
+      }
 
-        return {
-          more: more,
-          find: find,
-          reset: reset,
-        };
-      })();
-
-      const latest = (() => {
-        let latestPage = 1;
-        let done = false;
-        let elements = {};
-        let order = [];
-
-        let reset = () => {
-          done = false;
-          for (let element in elements) {
-            elements[element].remove();
-          }
-          elements = {};
-          order = [];
-          latestPage = 1;
-        };
-
-        let more = () => {
-          return new Promise((resolve, reject) => {
-            if (!done) {
-              let child = loaderFactory();
-              document.getElementById(LATEST_CONTAINER).appendChild(child);
-              fetch(
-                `https://cors-anywhere.herokuapp.com/${BASE_URL}/api/reader/chapters?page=${latestPage}&per_page=100&orderby=desc,updated`
-              ).then(async (e) => {
-                child.remove();
-                e = await e.json();
-                if (e["error"]) {
-                  done = true;
-                  resolve();
-                  return;
-                }
-                (e["chapters"] || []).forEach((comic) => {
-                  comic = comic["comic"];
-                  if (comic["name"] in elements) return;
-                  let meta = getComicInfo(comic);
-                  let card = cardFactory(meta);
-                  elements[comic["name"]] = card;
-                  order.push(comic["name"]);
-                  document.getElementById(LATEST_CONTAINER).appendChild(card);
-                  observer.observe(card);
-                });
-                latestPage++;
-                resolve();
-              });
-            } else {
-              resolve();
-            }
-          });
-        };
-
-        return {
-          more: more,
-          reset: reset,
-        };
-      })();
+      const browse = new SearchableBrowser(BROWSE_CONTAINER, SEARCH_CONTAINER);
+      const latest = new Handler(LATEST_CONTAINER);
 
       const chooseSite = (reader, name) => {
         document.getElementById("site-text").innerHTML = name;
@@ -542,8 +517,7 @@
             </div>
           </section>
           <div class="container">
-            <div class="columns is-multiline">
-            </div>
+            <div class="columns is-multiline"></div>
           </div>
         </div>
       </div>
